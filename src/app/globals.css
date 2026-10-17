@@ -1,0 +1,42 @@
+@import "tailwindcss";
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  margin: 0;
+}
+
+/* ─── Ndiho Space palette (from the Ndiho prototype) ─────────────────────── */
+@theme {
+  --color-nd-primary: #244267;
+  --color-nd-primary-light: #3d5a80;
+  --color-nd-primary-fixed: #d3e3ff;
+  --color-nd-background: #fcf9f8;
+  --color-nd-surface-low: #f6f3f2;
+  --color-nd-surface-lowest: #ffffff;
+  --color-nd-surface-highest: #e5e2e1;
+  --color-nd-surface-variant: #e8edf5;
+  --color-nd-on-background: #1c1b1b;
+  --color-nd-secondary: #bce5fe;
+  --color-nd-tertiary: #ffdea8;
+  --color-nd-lavender: #e8d5f5;
+  --color-nd-mint: #d5f0e8;
+  --color-nd-peach: #ffe8d5;
+  --color-nd-muted: #6b7a90;
+}
+
+/* Explicit utilities rather than theme tokens: the font variables are defined
+   by next/font on <html>, after the theme is resolved on :root. */
+@utility font-nd-serif {
+  font-family: var(--font-nd-playfair), Georgia, serif;
+}
+@utility font-nd-sans {
+  font-family: var(--font-nd-dm-sans), system-ui, sans-serif;
+}
+
+@keyframes nd-fade-up {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}

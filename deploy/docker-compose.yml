@@ -1,0 +1,116 @@
+# NdihoSpace production stack. Run from this directory:
+#   docker compose up -d --build
+# Settings come from deploy/.env (see env.example).
+name: ndiho
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ndiho
+      POSTGRES_USER: ndiho
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in deploy/.env}
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ndiho -d ndiho"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    # Not published: only the app can reach the database.
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: ndiho-app:latest
+    restart: unless-stopped
+    # Forward SIGTERM to Node so restarts/deploys take ~1s instead of a 10s kill timeout.
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NDIHO_DATABASE_URL: postgres://ndiho:${POSTGRES_PASSWORD}@db:5432/ndiho
+      NDIHO_STUN_URLS: stun:${DOMAIN}:3478
+      NDIHO_TURN_URLS: turn:${DOMAIN}:3478?transport=udp,turn:${DOMAIN}:3478?transport=tcp,turns:${DOMAIN}:5349?transport=tcp
+      NDIHO_TURN_SECRET: ${TURN_SECRET:?set TURN_SECRET in deploy/.env}
+      NDIHO_ICE_TRANSPORT_POLICY: ${NDIHO_ICE_TRANSPORT_POLICY:-all}
+    # IMPORTANT: run exactly one app container. Call signaling is delivered
+    # in-process; scaling out needs a shared bus (see docs/ndiho-space.md).
+    expose:
+      - "3000"
+
+  caddy:
+    image: caddy:2.8
+    restart: unless-stopped
+    depends_on:
+      - app
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      DOMAIN: ${DOMAIN:?set DOMAIN in deploy/.env}
+      ACME_EMAIL: ${ACME_EMAIL:?set ACME_EMAIL in deploy/.env}
+      CADDY_EXTRA_GLOBAL: ${CADDY_EXTRA_GLOBAL:-}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+  # TURN/STUN server: relays media when the two browsers can't connect
+  # directly (mobile networks, corporate firewalls, symmetric NAT).
+  coturn:
+    image: coturn/coturn:4.6.3
+    restart: unless-stopped
+    # Host networking: relaying uses a large UDP port range, which Docker's
+    # port publishing handles poorly. The host firewall (ufw) applies.
+    network_mode: host
+    volumes:
+      - ./turn-certs:/certs:ro
+    # Note: the image's entrypoint passes each argument through `eval echo`,
+    # so values must not contain shell-special characters (use hex secrets).
+    command:
+      - --log-file=stdout
+      - --listening-port=3478
+      - --tls-listening-port=5349
+      - --min-port=${TURN_MIN_PORT:-49160}
+      - --max-port=${TURN_MAX_PORT:-49999}
+      # Relay only from the main network interface (not Docker bridges), and
+      # advertise it as the public IP (works with or without provider NAT).
+      - --relay-ip=${RELAY_IP:?set RELAY_IP in deploy/.env}
+      - --external-ip=${PUBLIC_IP:?set PUBLIC_IP in deploy/.env}/${RELAY_IP}
+      - --realm=${DOMAIN}
+      - --server-name=${DOMAIN}
+      - --fingerprint
+      - --use-auth-secret
+      - --static-auth-secret=${TURN_SECRET}
+      - --cert=/certs/turn.crt
+      - --pkey=/certs/turn.key
+      - --no-tlsv1
+      - --no-tlsv1_1
+      - --no-cli
+      - --no-multicast-peers
+      - --stale-nonce=600
+      - --user-quota=12
+      - --total-quota=1200
+      # Never relay into private/internal networks (protects the VPS's own services).
+      - --denied-peer-ip=0.0.0.0-0.255.255.255
+      - --denied-peer-ip=10.0.0.0-10.255.255.255
+      - --denied-peer-ip=100.64.0.0-100.127.255.255
+      - --denied-peer-ip=127.0.0.0-127.255.255.255
+      - --denied-peer-ip=169.254.0.0-169.254.255.255
+      - --denied-peer-ip=172.16.0.0-172.31.255.255
+      - --denied-peer-ip=192.0.0.0-192.0.0.255
+      - --denied-peer-ip=192.168.0.0-192.168.255.255
+      - --denied-peer-ip=198.18.0.0-198.19.255.255
+      - --denied-peer-ip=::1
+      - --denied-peer-ip=fc00::-fdff:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+      - --denied-peer-ip=fe80::-febf:ffff:ffff:ffff:ffff:ffff:ffff:ffff
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:

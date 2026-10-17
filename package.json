@@ -1,0 +1,41 @@
+{
+  "name": "ndiho-space",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Confidential online therapy: therapist & patient accounts and secure real-time video consultations.",
+  "engines": {
+    "node": ">=20.9"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "eslint",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "db:migrate": "node scripts/migrate.mjs",
+    "admin": "node scripts/admin.mjs"
+  },
+  "dependencies": {
+    "bcryptjs": "3.0.3",
+    "next": "16.2.6",
+    "pg": "8.23.1",
+    "react": "19.2.4",
+    "react-dom": "19.2.4",
+    "server-only": "0.0.1",
+    "zod": "4.4.3"
+  },
+  "devDependencies": {
+    "@tailwindcss/postcss": "4.3.0",
+    "@types/node": "^20.19.41",
+    "@types/pg": "8.23.1",
+    "@types/react": "^19.2.15",
+    "@types/react-dom": "^19.2.3",
+    "dotenv": "17.4.2",
+    "eslint": "^9.39.4",
+    "eslint-config-next": "16.2.6",
+    "tailwindcss": "4.3.0",
+    "typescript": "^5.9.3",
+    "vitest": "3.2.7"
+  }
+}

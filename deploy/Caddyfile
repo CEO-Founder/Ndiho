@@ -1,0 +1,24 @@
+# Caddy: HTTPS (automatic Let's Encrypt certificates) in front of the app.
+{
+	email {$ACME_EMAIL}
+	{$CADDY_EXTRA_GLOBAL}
+}
+
+{$DOMAIN} {
+	encode zstd gzip
+
+	reverse_proxy app:3000 {
+		# Stream Server-Sent Events (incoming calls, call signaling) without buffering.
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+		# Video calls need camera + microphone on this origin only.
+		Permissions-Policy "camera=(self), microphone=(self), display-capture=(self), geolocation=()"
+		-Server
+	}
+}
