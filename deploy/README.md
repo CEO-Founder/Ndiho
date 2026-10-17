@@ -22,6 +22,10 @@ strict firewalls. Relayed media stays encrypted; coturn can't decrypt it.
    2 GB RAM recommended; 1 GB works (the installer adds swap for the build).
 2. **A domain/subdomain** (e.g. `app.ndihospace.com`) with an **A record → your
    VPS IP**. On Cloudflare, set it to **DNS only** (grey cloud).
+   **No domain yet?** Use the free name `<your-ip-with-dashes>.sslip.io`, e.g.
+   `102-202-208-135.sslip.io`. It already resolves to that IP, so it gets a normal
+   trusted HTTPS certificate (browsers only allow camera/microphone over HTTPS).
+   Switch to your own domain later by re-running `install.sh --domain …`.
 3. **Ports open in your provider's firewall** if it has one (e.g. Hostinger
    hPanel → VPS → Firewall): TCP 22, 80, 443, 3478, 5349; UDP 443, 3478, 5349,
    49160–49999. The installer configures the VPS's own firewall (ufw).

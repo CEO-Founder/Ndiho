@@ -83,10 +83,19 @@ fi
 ok "DNS points to this server"
 
 log "Configuring the firewall (ufw)"
-# Keep SSH open on whatever port(s) sshd actually uses, so enabling ufw can't lock you out.
-ssh_ports=$(sshd -T 2>/dev/null | awk '/^port /{print $2}')
-for p in ${ssh_ports:-22}; do ufw allow "${p}/tcp" >/dev/null; done
-ok "SSH allowed on port(s): ${ssh_ports:-22}"
+# Keep SSH open on every port it really uses, so enabling ufw can't lock you out:
+# sshd's config, the port of this very SSH session, and ports sshd (or systemd's
+# ssh.socket on Ubuntu 24.04+) is listening on.
+ssh_ports=$(
+  {
+    sshd -T 2>/dev/null | awk '/^port /{print $2}'
+    [ -n "${SSH_CONNECTION:-}" ] && echo "$SSH_CONNECTION" | awk '{print $4}'
+    ss -ltnpH 2>/dev/null | awk '/"sshd"|"sshd-session"|"systemd"/ {n = split($4, a, ":"); print a[n]}'
+  } | grep -E '^[0-9]+$' | sort -un | tr '\n' ' '
+)
+ssh_ports="${ssh_ports:-22}"
+for p in $ssh_ports; do ufw allow "${p}/tcp" >/dev/null; done
+ok "SSH allowed on port(s): ${ssh_ports}"
 ufw allow 80/tcp >/dev/null          # HTTP (certificate issuance + redirect)
 ufw allow 443/tcp >/dev/null         # HTTPS
 ufw allow 443/udp >/dev/null         # HTTP/3
