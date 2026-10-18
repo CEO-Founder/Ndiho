@@ -31,6 +31,7 @@ export interface TherapistProfile {
   sessionFeeRwf: number | null;
   verificationStatus: VerificationStatus;
   verifiedAt: string | null;
+  verificationNotes: string | null;
 }
 
 export interface PatientProfile {
@@ -187,6 +188,7 @@ type AccountRow = {
   t_fee: number | null;
   t_status: VerificationStatus | null;
   t_verified_at: Date | null;
+  t_notes: string | null;
   p_dob: string | null;
   p_gender: string | null;
   p_language: string | null;
@@ -203,7 +205,7 @@ export async function getAccount(userId: string): Promise<Account | null> {
             t.licensing_body as t_licensing_body, t.license_country as t_license_country,
             t.years_experience as t_years, t.specialties as t_specialties,
             t.languages as t_languages, t.bio as t_bio, t.session_fee_rwf as t_fee,
-            t.verification_status as t_status, t.verified_at as t_verified_at,
+            t.verification_status as t_status, t.verified_at as t_verified_at, t.verification_notes as t_notes,
             to_char(p.date_of_birth, 'YYYY-MM-DD') as p_dob, p.gender as p_gender,
             p.preferred_language as p_language, p.country as p_country, p.city as p_city,
             p.emergency_contact_name as p_ec_name, p.emergency_contact_phone as p_ec_phone
@@ -235,6 +237,7 @@ export async function getAccount(userId: string): Promise<Account | null> {
       sessionFeeRwf: r.t_fee,
       verificationStatus: r.t_status!,
       verifiedAt: r.t_verified_at?.toISOString() ?? null,
+      verificationNotes: r.t_notes,
     };
   }
   if (r.role === "patient") {

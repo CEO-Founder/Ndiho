@@ -1,5 +1,6 @@
 import "server-only";
 import type { PoolClient } from "pg";
+import { appointmentForCall, markAppointmentHeld, reloadAndNotify } from "./appointments";
 import { getPool, query, queryOne, transaction, type Queryable } from "./db";
 import { ApiError } from "./http";
 import { publish } from "./realtime";
@@ -30,6 +31,7 @@ export interface CallView {
   endedAt: string | null;
   endReason: string | null;
   ringTimeoutSeconds: number;
+  appointmentId: string | null;
 }
 
 type CallRow = {
@@ -44,10 +46,11 @@ type CallRow = {
   answered_at: Date | null;
   ended_at: Date | null;
   end_reason: string | null;
+  appointment_id: string | null;
 };
 
 const CALL_SELECT = `
-  select c.id, c.status, c.caller_id, c.created_at, c.answered_at, c.ended_at, c.end_reason,
+  select c.id, c.status, c.caller_id, c.created_at, c.answered_at, c.ended_at, c.end_reason, c.appointment_id,
          c.therapist_id, t.full_name as therapist_name,
          c.patient_id, p.full_name as patient_name
     from ndiho_calls c
@@ -66,6 +69,7 @@ function toView(r: CallRow): CallView {
     endedAt: r.ended_at?.toISOString() ?? null,
     endReason: r.end_reason,
     ringTimeoutSeconds: RING_TIMEOUT_SECONDS,
+    appointmentId: r.appointment_id,
   };
 }
 
@@ -139,7 +143,7 @@ async function lockUsers(client: PoolClient, ...userIds: string[]) {
  * - Therapists may call a patient only if that patient has called them before
  *   (a call-back), so therapists cannot cold-call arbitrary patients.
  */
-async function assertMayCall(db: Queryable, caller: SessionUser, calleeId: string) {
+async function assertMayCall(db: Queryable, caller: SessionUser, calleeId: string, viaAppointment = false) {
   const callee = await queryOne<{
     id: string;
     role: string;
@@ -152,7 +156,10 @@ async function assertMayCall(db: Queryable, caller: SessionUser, calleeId: strin
     [calleeId],
     db,
   );
-  if (!callee || callee.account_status !== "active" || callee.role === caller.role) {
+  if (caller.role === "admin") {
+    throw new ApiError(403, "FORBIDDEN", "Admin accounts cannot make calls");
+  }
+  if (!callee || callee.account_status !== "active" || callee.role === caller.role || callee.role === "admin") {
     throw new ApiError(404, "CALLEE_NOT_FOUND", "This person is not available for calls");
   }
   if (caller.role === "patient") {
@@ -169,6 +176,8 @@ async function assertMayCall(db: Queryable, caller: SessionUser, calleeId: strin
   if (self?.verification_status !== "verified") {
     throw new ApiError(403, "THERAPIST_NOT_VERIFIED", "Your profile must be verified before you can make calls");
   }
+  // A booked session is itself the relationship that allows the call.
+  if (viaAppointment) return;
   const priorContact = await queryOne(
     "select 1 from ndiho_calls where therapist_id = $1 and patient_id = $2 and caller_id = $2 limit 1",
     [caller.id, calleeId],
@@ -179,11 +188,12 @@ async function assertMayCall(db: Queryable, caller: SessionUser, calleeId: strin
   }
 }
 
-export async function startCall(caller: SessionUser, calleeId: string): Promise<CallView> {
+export async function startCall(caller: SessionUser, calleeId: string, appointmentId?: string): Promise<CallView> {
   if (calleeId === caller.id) throw new ApiError(400, "INVALID_CALLEE", "You cannot call yourself");
 
   const { call, expired } = await transaction(async (client) => {
-    await assertMayCall(client, caller, calleeId);
+    if (appointmentId) await appointmentForCall(client, caller, appointmentId, calleeId);
+    await assertMayCall(client, caller, calleeId, Boolean(appointmentId));
     await lockUsers(client, caller.id, calleeId);
     const expired = await expireStaleCalls(client, [caller.id, calleeId]);
 
@@ -204,8 +214,8 @@ export async function startCall(caller: SessionUser, calleeId: string): Promise<
     const [therapistId, patientId] =
       caller.role === "therapist" ? [caller.id, calleeId] : [calleeId, caller.id];
     const { rows } = await client.query<{ id: string }>(
-      `insert into ndiho_calls (therapist_id, patient_id, caller_id) values ($1, $2, $3) returning id`,
-      [therapistId, patientId, caller.id],
+      `insert into ndiho_calls (therapist_id, patient_id, caller_id, appointment_id) values ($1, $2, $3, $4) returning id`,
+      [therapistId, patientId, caller.id, appointmentId ?? null],
     );
     return { call: (await loadCall(client, rows[0].id))!, expired };
   });
@@ -224,13 +234,19 @@ export async function getCall(user: SessionUser, callId: string): Promise<CallVi
 }
 
 export async function acceptCall(user: SessionUser, callId: string): Promise<CallView> {
-  return transition(user, callId, (call) => {
+  const call = await transition(user, callId, (call) => {
     if (call.callerId === user.id) {
       throw new ApiError(403, "NOT_CALLEE", "Only the person being called can accept");
     }
     requireStatus(call, ["ringing"]);
     return { sql: "status = 'accepted', answered_at = now(), last_heartbeat_at = now()" };
   });
+  // An answered call means the booked session took place.
+  if (call.appointmentId) {
+    await markAppointmentHeld(getPool(), call.appointmentId);
+    await reloadAndNotify(call.appointmentId);
+  }
+  return call;
 }
 
 export async function rejectCall(user: SessionUser, callId: string): Promise<CallView> {

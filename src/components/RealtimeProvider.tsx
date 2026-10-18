@@ -1,12 +1,13 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from "react";
-import type { CallView } from "./types";
+import type { AppointmentView, CallView } from "./types";
 
 export type RealtimeMessage =
   | { type: "call.incoming"; call: CallView }
   | { type: "call.updated"; call: CallView }
-  | { type: "call.signal"; callId: string; from: string; kind: "ready" | "offer" | "answer" | "ice"; data?: unknown };
+  | { type: "call.signal"; callId: string; from: string; kind: "ready" | "offer" | "answer" | "ice"; data?: unknown }
+  | { type: "appointment.updated"; appointment: AppointmentView };
 
 type Listener = (msg: RealtimeMessage) => void;
 
@@ -19,7 +20,7 @@ interface RealtimeContextValue {
 
 const RealtimeContext = createContext<RealtimeContextValue | null>(null);
 
-const EVENTS = ["call.incoming", "call.updated", "call.signal"] as const;
+const EVENTS = ["call.incoming", "call.updated", "call.signal", "appointment.updated"] as const;
 
 /** One EventSource per tab, shared by everything under the Ndiho app layout. */
 export function RealtimeProvider({ children }: { children: ReactNode }) {

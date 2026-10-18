@@ -28,12 +28,13 @@ npm run dev                     # http://localhost:3000
 Camera access works on `localhost`; other origins need HTTPS. Without TURN
 configured, calls connect between devices on the same network.
 
-Approve a therapist (there is no admin UI yet):
+Create the first admin, then approve therapists at `/admin`:
 
 ```bash
-npm run admin -- pending
-npm run admin -- verify therapist@example.com
+npm run admin -- create-admin you@example.com "Your Name"   # prints a one-time password
 ```
+
+The CLI can also do it: `npm run admin -- pending | verify <email> | reject <email> "<reason>"`.
 
 Checks:
 
@@ -51,7 +52,11 @@ disposable one.
 | --- | --- |
 | `/` | Homepage |
 | `/register` (`?role=therapist`), `/login` | Accounts |
-| `/dashboard` | Patients: verified-therapist directory and **Video call**. Therapists: verification status, patients, call-back. Both: call history. |
+| `/dashboard` | Stats, upcoming sessions with **Join session** / cancel, call history. Patients: therapist directory (book or call now). Therapists: verification status, patients. |
+| `/book` | Booking wizard: service → therapist → date & time → confirm |
+| `/availability` | Therapists: weekly availability editor |
+| `/patients`, `/patients/[id]` | Therapists: patient list, session history and private session notes |
+| `/admin` | Admins: platform stats, therapist review (approve / reject with reason), user search, suspend / reactivate |
 | `/call/[id]` | Video call room |
 | `/check` | Camera, microphone and STUN/TURN (UDP/TCP/TLS) self-test |
 | `/profile`, `/privacy` | Profile editing, privacy policy |
@@ -73,6 +78,20 @@ server relays WebRTC signaling (`POST /api/calls/:id/signal`) only between the
 two participants and only while the call is accepted. Patients can call any
 verified therapist; therapists can call back patients who contacted them.
 Nobody can be in two calls at once.
+
+**Appointments.** Therapists set weekly availability (Kigali time). Patients
+book 50-minute sessions on the hour, up to 14 days ahead and at least an hour in
+advance. Partial unique indexes make double-booking impossible even under
+concurrent requests. Either side can cancel before the start. From 10 minutes
+before until 15 minutes after a session, both see **Join session**, which starts
+the video call linked to the appointment. That also lets a therapist call a new
+patient who booked them, and an answered call marks the session as held.
+Therapists keep private notes per patient that nobody else can read.
+
+**Admins** are created with `scripts/admin.mjs create-admin`. They approve or
+reject therapists (with a reason the therapist sees), suspend or reactivate
+accounts (signing them out immediately), and see platform activity. Admin
+accounts cannot take part in calls.
 
 **Connectivity.** `GET /api/ice` returns STUN/TURN servers with short-lived,
 per-user TURN credentials (coturn `use-auth-secret`). Each negotiation has an
@@ -105,4 +124,4 @@ The Docker deployment sets these for you from `deploy/.env`.
 
 - Add a verified 24/7 crisis helpline to the footer (`src/app/page.tsx`).
 - Add your contact address to the privacy policy and have it reviewed (`src/app/privacy/page.tsx`).
-- Not built yet: booking & payments, admin UI, email verification / password reset, social login.
+- Not built yet: online payment (MTN MoMo / Airtel Money / card), email or SMS reminders, email verification / password reset, social login.

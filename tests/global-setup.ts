@@ -11,9 +11,13 @@ export default async function setup() {
   process.env.NDIHO_DATABASE_URL = url;
   const client = new pg.Client({ connectionString: url });
   await client.connect();
-  await client.query(`
-    drop table if exists ndiho_calls, ndiho_sessions, ndiho_patient_profiles,
-      ndiho_therapist_profiles, ndiho_users, ndiho_schema_migrations cascade`);
+  // Drop every Ndiho table (current and future migrations) for a clean run.
+  const { rows } = await client.query<{ tablename: string }>(
+    "select tablename from pg_tables where schemaname = 'public' and tablename like 'ndiho\\_%'",
+  );
+  if (rows.length) {
+    await client.query(`drop table if exists ${rows.map((r) => `"${r.tablename}"`).join(", ")} cascade`);
+  }
   await client.end();
   execFileSync("node", ["scripts/migrate.mjs"], {
     env: { ...process.env, NDIHO_DATABASE_URL: url },

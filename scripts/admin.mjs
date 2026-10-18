@@ -35,7 +35,26 @@ const SQL = {
 
 await client.connect();
 try {
-  if (command === "pending") {
+  if (command === "create-admin" && email) {
+    const fullName = rest.join(" ").trim();
+    if (fullName.length < 2) throw new Error('Usage: create-admin <email> "<full name>"');
+    const { randomBytes } = await import("node:crypto");
+    const bcrypt = (await import("bcryptjs")).default;
+    const password = randomBytes(18).toString("base64url");
+    const hash = await bcrypt.hash(password, 12);
+    try {
+      await client.query(
+        "insert into ndiho_users (email, password_hash, role, full_name) values ($1, $2, 'admin', $3)",
+        [email.trim().toLowerCase(), hash, fullName],
+      );
+    } catch (err) {
+      if (err.code === "23505") throw new Error(`An account with ${email} already exists`);
+      throw err;
+    }
+    console.log(`Admin created: ${email.toLowerCase()}`);
+    console.log(`Temporary password (shown once): ${password}`);
+    console.log("Sign in at /login and keep this password somewhere safe.");
+  } else if (command === "pending") {
     const { rows } = await client.query(
       `select u.email, u.full_name, t.professional_title, t.licensing_body, t.license_country,
               t.license_number, t.created_at
@@ -59,7 +78,7 @@ try {
       console.log(`${command}: ${email}`);
     }
   } else {
-    console.error("Usage: ndiho-admin.mjs pending | verify <email> | reject <email> <reason> | suspend <email> | activate <email>");
+    console.error('Usage: admin.mjs create-admin <email> "<name>" | pending | verify <email> | reject <email> <reason> | suspend <email> | activate <email>');
     process.exitCode = 1;
   }
 } finally {

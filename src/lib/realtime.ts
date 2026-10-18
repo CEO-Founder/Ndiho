@@ -12,7 +12,8 @@ import "server-only";
 export type RealtimeEvent =
   | { type: "call.incoming"; call: unknown }
   | { type: "call.updated"; call: unknown }
-  | { type: "call.signal"; callId: string; from: string; kind: string; data?: unknown };
+  | { type: "call.signal"; callId: string; from: string; kind: string; data?: unknown }
+  | { type: "appointment.updated"; appointment: unknown };
 
 type Listener = (event: RealtimeEvent) => void;
 
