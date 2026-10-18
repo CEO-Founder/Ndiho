@@ -58,7 +58,7 @@ Host github.com
 EOF
 ssh-keyscan github.com >> ~/.ssh/known_hosts
 
-git clone git@github.com:CEO-Founder/Ndiho.git /opt/ndihospace
+git clone git@github.com:Nshuti-Clement/Ndiho-.git /opt/ndihospace
 cd /opt/ndihospace
 
 deploy/scripts/install.sh --domain app.ndihospace.com --email you@example.com
