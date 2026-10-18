@@ -78,17 +78,21 @@ It tests HTTPS, health, a complete call flow through your public URL
 (incoming-call event → accept → signaling → hang-up), and real TURN relay
 allocations over UDP, TCP and TLS. Every line must show ✓.
 
-## Make the first therapist bookable
-
-Therapists register at `https://YOUR_DOMAIN/register?role=therapist` and
-start as *pending*. After checking their license:
+## Create your admin account and approve therapists
 
 ```bash
 cd /opt/ndihospace/deploy
-docker compose exec app node scripts/admin.mjs pending
-docker compose exec app node scripts/admin.mjs verify therapist@example.com
-# also: reject <email> "<reason>" | suspend <email> | activate <email>
+docker compose exec app node scripts/admin.mjs create-admin you@example.com "Your Name"
 ```
+
+This prints a one-time password. Sign in at `https://YOUR_DOMAIN/login` to reach
+the **admin dashboard** (`/admin`). Therapists register at
+`/register?role=therapist` and appear there as *pending*. Check their license,
+then **Approve**, or **Reject** with a reason they will see. Approved therapists
+then set their weekly hours under **Availability** so patients can book them.
+
+Command-line alternative:
+`docker compose exec app node scripts/admin.mjs pending | verify <email> | reject <email> "<reason>"`.
 
 ## Test real video calls (do this before going live)
 

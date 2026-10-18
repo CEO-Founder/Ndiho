@@ -6,8 +6,17 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { LANGUAGES, SPECIALTIES } from "@/lib/schemas";
 import { api, errorMessage } from "./api";
 import { useRealtimeEvents } from "./RealtimeProvider";
-import type { Account, CallParticipant, CallView, PublicTherapist } from "./types";
+import { AppointmentList, Card, PLATFORM_TIMEZONE_LABEL, StatTiles } from "./sessions";
+import type { Account, AppointmentView, CallParticipant, CallView, DashboardStats, PublicTherapist } from "./types";
 import { Avatar, Button, inputClass, LinkButton, Pill } from "./ui";
+
+interface PatientSummary {
+  id: string;
+  fullName: string;
+  sessionsHeld: number;
+  lastSessionAt: string | null;
+  nextAppointmentAt: string | null;
+}
 
 export function Dashboard({ account, welcome }: { account: Account; welcome: boolean }) {
   const router = useRouter();
@@ -16,6 +25,8 @@ export function Dashboard({ account, welcome }: { account: Account; welcome: boo
   const [loadingCalls, setLoadingCalls] = useState(true);
   const [callError, setCallError] = useState<string | null>(null);
   const [calling, setCalling] = useState<string | null>(null);
+  const [appointments, setAppointments] = useState<AppointmentView[] | null>(null);
+  const [stats, setStats] = useState<DashboardStats | null>(null);
 
   const loadCalls = useCallback(
     () =>
@@ -30,12 +41,26 @@ export function Dashboard({ account, welcome }: { account: Account; welcome: boo
     [],
   );
 
+  const loadSessions = useCallback(
+    () =>
+      Promise.all([
+        api<{ appointments: AppointmentView[] }>("/appointments").then((d) => setAppointments(d.appointments)),
+        api<{ stats: DashboardStats }>("/dashboard").then((d) => setStats(d.stats)),
+      ]).catch(() => {}),
+    [],
+  );
+
   useEffect(() => {
     void loadCalls();
-  }, [loadCalls]);
+    void loadSessions();
+  }, [loadCalls, loadSessions]);
 
   useRealtimeEvents((msg) => {
-    if (msg.type === "call.incoming" || msg.type === "call.updated") loadCalls();
+    if (msg.type === "call.incoming" || msg.type === "call.updated") {
+      loadCalls();
+      if (msg.type === "call.updated" && msg.call.status === "ended") loadSessions();
+    }
+    if (msg.type === "appointment.updated") loadSessions();
   });
 
   async function startCall(calleeId: string) {
@@ -63,9 +88,22 @@ export function Dashboard({ account, welcome }: { account: Account; welcome: boo
         <p className="max-w-2xl text-nd-muted">
           {account.role === "therapist"
             ? "Keep this page open to receive video calls from your patients."
-            : "Choose a verified therapist and start a confidential video consultation."}
+            : "Book a session with a verified therapist, or call one who is available now."}
         </p>
       </div>
+
+      {stats && (
+        <div className="mb-6">
+          <StatTiles
+            items={[
+              { label: "Upcoming sessions", value: stats.upcomingSessions },
+              { label: "Sessions this week", value: stats.sessionsThisWeek },
+              { label: "Minutes this month", value: stats.minutesThisMonth },
+              ...(stats.patients !== undefined ? [{ label: "Patients", value: stats.patients }] : []),
+            ]}
+          />
+        </div>
+      )}
 
       {activeCall && (
         <div className="mb-6 flex flex-col items-start justify-between gap-3 rounded-2xl bg-emerald-50 p-4 ring-1 ring-emerald-200 sm:flex-row sm:items-center">
@@ -79,8 +117,43 @@ export function Dashboard({ account, welcome }: { account: Account; welcome: boo
 
       <div className="grid gap-6 lg:grid-cols-[1fr_360px]">
         <div className="flex min-w-0 flex-col gap-6">
+          <Card>
+            <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
+              <div>
+                <h2 className="font-nd-serif text-2xl font-bold text-nd-primary">Upcoming sessions</h2>
+                <p className="text-sm text-nd-muted">Times in {PLATFORM_TIMEZONE_LABEL}. Join opens 10 minutes before the start.</p>
+              </div>
+              {account.role === "patient" ? (
+                <LinkButton href="/book" size="sm">+ Book a session</LinkButton>
+              ) : (
+                <LinkButton href="/availability" size="sm" variant="outline">Set availability</LinkButton>
+              )}
+            </div>
+            {appointments === null ? (
+              <p className="py-6 text-center text-sm text-nd-muted">Loading…</p>
+            ) : (
+              <AppointmentList
+                appointments={appointments}
+                me={account.id}
+                onChanged={loadSessions}
+                empty={
+                  <p className="rounded-2xl bg-nd-surface-low px-4 py-8 text-center text-sm text-nd-muted">
+                    {account.role === "patient"
+                      ? "No sessions booked yet. Choose a therapist below and pick a time that suits you."
+                      : "No sessions booked yet. Make sure your weekly availability is set so patients can book you."}
+                  </p>
+                }
+              />
+            )}
+          </Card>
           {account.role === "therapist" ? (
-            <TherapistPanel account={account} patients={callable} calling={calling} onCall={startCall} />
+            <TherapistPanel
+              account={account}
+              patients={callable}
+              calling={calling}
+              onCall={startCall}
+              refreshKey={appointments?.map((a) => `${a.id}:${a.status}`).join() ?? ""}
+            />
           ) : (
             <TherapistDirectory calling={calling} onCall={startCall} disabled={!!activeCall} />
           )}
@@ -89,10 +162,6 @@ export function Dashboard({ account, welcome }: { account: Account; welcome: boo
       </div>
     </div>
   );
-}
-
-function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-3xl bg-nd-surface-lowest p-5 shadow-[0_8px_32px_rgba(36,66,103,0.05)] sm:p-7 ${className}`}>{children}</section>;
 }
 
 function TherapistDirectory({ calling, onCall, disabled }: { calling: string | null; onCall: (id: string) => void; disabled: boolean }) {
@@ -158,9 +227,12 @@ function TherapistDirectory({ calling, onCall, disabled }: { calling: string | n
                 {t.languages.map((l) => <Pill key={l} tone="muted">{l}</Pill>)}
               </div>
             </div>
-            <Button size="sm" onClick={() => onCall(t.id)} disabled={disabled || calling !== null} className="w-full sm:w-auto">
-              {calling === t.id ? "Calling…" : "📹 Video call"}
-            </Button>
+            <div className="flex w-full gap-2 sm:w-auto sm:flex-col">
+              <LinkButton href={`/book?therapist=${t.id}`} size="sm" className="flex-1">Book a session</LinkButton>
+              <Button size="sm" variant="outline" onClick={() => onCall(t.id)} disabled={disabled || calling !== null} className="flex-1">
+                {calling === t.id ? "Calling…" : "📹 Call now"}
+              </Button>
+            </div>
           </li>
         ))}
       </ul>
@@ -168,24 +240,40 @@ function TherapistDirectory({ calling, onCall, disabled }: { calling: string | n
   );
 }
 
-function TherapistPanel({ account, patients, calling, onCall }: {
+function TherapistPanel({ account, patients, calling, onCall, refreshKey }: {
   account: Account;
   patients: CallParticipant[];
   calling: string | null;
   onCall: (id: string) => void;
+  /** Changes when bookings change, so the patient list reloads live. */
+  refreshKey: string;
 }) {
   const t = account.therapist!;
   const status = {
     pending: { tone: "bg-amber-50 ring-amber-200 text-amber-900", title: "Verification in progress", body: "We're reviewing your license. Once verified, your profile appears in the therapist directory and patients can call you." },
     verified: { tone: "bg-emerald-50 ring-emerald-200 text-emerald-900", title: "Your profile is verified", body: "Patients can find you in the directory and start video consultations." },
-    rejected: { tone: "bg-red-50 ring-red-200 text-red-900", title: "Verification unsuccessful", body: "We couldn't verify your license details. Please check them on your profile or contact support." },
+    rejected: { tone: "bg-red-50 ring-red-200 text-red-900", title: "Verification unsuccessful", body: "We couldn't verify your license details. Please correct them on your profile — that sends them for review again." },
   }[t.verificationStatus];
+  const [list, setList] = useState<PatientSummary[] | null>(null);
+  const callableIds = new Set(patients.map((p) => p.id));
+  useEffect(() => {
+    let cancelled = false;
+    api<{ patients: PatientSummary[] }>("/patients")
+      .then((d) => !cancelled && setList(d.patients))
+      .catch(() => !cancelled && setList([]));
+    return () => {
+      cancelled = true;
+    };
+  }, [patients, refreshKey]);
 
   return (
     <>
       <div className={`rounded-2xl p-5 ring-1 ${status.tone}`}>
         <p className="font-bold">{status.title}</p>
         <p className="mt-1 text-sm opacity-90">{status.body}</p>
+        {t.verificationStatus === "rejected" && t.verificationNotes && (
+          <p className="mt-2 rounded-lg bg-white/60 px-3 py-2 text-sm"><strong>Reviewer&apos;s note:</strong> {t.verificationNotes}</p>
+        )}
       </div>
       <Card>
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
@@ -202,21 +290,36 @@ function TherapistPanel({ account, patients, calling, onCall }: {
         </div>
       </Card>
       <Card>
-        <h2 className="font-nd-serif text-2xl font-bold text-nd-primary">Your patients</h2>
-        <p className="mb-4 text-sm text-nd-muted">Patients who have contacted you. You can call them back at any time.</p>
-        {patients.length === 0 ? (
+        <div className="mb-4 flex items-end justify-between gap-3">
+          <div>
+            <h2 className="font-nd-serif text-2xl font-bold text-nd-primary">Your patients</h2>
+            <p className="text-sm text-nd-muted">Patients who booked or called you.</p>
+          </div>
+          {list && list.length > 0 && <Link href="/patients" className="text-sm font-semibold text-nd-primary-light hover:underline">View all →</Link>}
+        </div>
+        {list === null ? (
+          <p className="py-6 text-center text-sm text-nd-muted">Loading…</p>
+        ) : list.length === 0 ? (
           <p className="rounded-2xl bg-nd-surface-low px-4 py-8 text-center text-sm text-nd-muted">
-            No patients yet. When a patient calls you, they&apos;ll appear here.
+            No patients yet. When a patient books or calls you, they&apos;ll appear here.
           </p>
         ) : (
           <ul className="flex flex-col gap-2">
-            {patients.map((p) => (
+            {list.slice(0, 5).map((p) => (
               <li key={p.id} className="flex items-center gap-3 rounded-2xl bg-nd-surface-low/60 p-3">
                 <Avatar name={p.fullName} size={40} />
-                <span className="min-w-0 flex-1 truncate font-semibold text-nd-primary">{p.fullName}</span>
-                <Button size="sm" variant="secondary" disabled={calling !== null || t.verificationStatus !== "verified"} onClick={() => onCall(p.id)}>
-                  {calling === p.id ? "Calling…" : "Call back"}
-                </Button>
+                <Link href={`/patients/${p.id}`} className="min-w-0 flex-1">
+                  <span className="block truncate font-semibold text-nd-primary hover:underline">{p.fullName}</span>
+                  <span className="block text-xs text-nd-muted">
+                    {p.sessionsHeld} session{p.sessionsHeld === 1 ? "" : "s"}
+                    {p.nextAppointmentAt && ` · next ${new Date(p.nextAppointmentAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}`}
+                  </span>
+                </Link>
+                {callableIds.has(p.id) && (
+                  <Button size="sm" variant="secondary" disabled={calling !== null || t.verificationStatus !== "verified"} onClick={() => onCall(p.id)}>
+                    {calling === p.id ? "Calling…" : "Call back"}
+                  </Button>
+                )}
               </li>
             ))}
           </ul>

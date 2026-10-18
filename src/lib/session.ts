@@ -7,7 +7,7 @@ import { ApiError } from "./http";
 export const SESSION_COOKIE = "ndiho_session";
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
-export type Role = "therapist" | "patient";
+export type Role = "therapist" | "patient" | "admin";
 
 export interface SessionUser {
   id: string;

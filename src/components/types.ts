@@ -1,6 +1,6 @@
 // Response shapes of the Ndiho API, as seen by the browser.
 
-export type Role = "therapist" | "patient";
+export type Role = "therapist" | "patient" | "admin";
 export type CallStatus = "ringing" | "accepted" | "rejected" | "cancelled" | "missed" | "ended";
 
 export interface Account {
@@ -22,6 +22,7 @@ export interface Account {
     sessionFeeRwf: number | null;
     verificationStatus: "pending" | "verified" | "rejected";
     verifiedAt: string | null;
+    verificationNotes: string | null;
   };
   patient?: {
     dateOfBirth: string | null;
@@ -64,4 +65,30 @@ export interface CallView {
   endedAt: string | null;
   endReason: string | null;
   ringTimeoutSeconds: number;
+  appointmentId: string | null;
+}
+
+export interface AppointmentView {
+  id: string;
+  service: string;
+  startsAt: string;
+  endsAt: string;
+  durationMinutes: number;
+  status: "booked" | "cancelled" | "completed";
+  therapist: { id: string; fullName: string };
+  patient: { id: string; fullName: string };
+  patientNote: string | null;
+  cancelledBy: string | null;
+  cancelReason: string | null;
+  createdAt: string;
+  sessionHeld: boolean;
+  joinOpensAt: string;
+  joinClosesAt: string;
+}
+
+export interface DashboardStats {
+  upcomingSessions: number;
+  sessionsThisWeek: number;
+  minutesThisMonth: number;
+  patients?: number;
 }

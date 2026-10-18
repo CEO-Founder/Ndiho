@@ -19,19 +19,32 @@ export function AppHeader({ user }: { user: { fullName: string; role: string } }
     router.refresh();
   }
 
-  const links = [
-    { href: "/dashboard", label: "Dashboard" },
-    { href: "/profile", label: "Profile" },
-    { href: "/check", label: "Test setup" },
-  ];
+  const links =
+    user.role === "admin"
+      ? [{ href: "/admin", label: "Admin" }]
+      : user.role === "therapist"
+        ? [
+            { href: "/dashboard", label: "Dashboard" },
+            { href: "/patients", label: "Patients" },
+            { href: "/availability", label: "Availability" },
+            { href: "/profile", label: "Profile" },
+            { href: "/check", label: "Test setup" },
+          ]
+        : [
+            { href: "/dashboard", label: "Dashboard" },
+            { href: "/book", label: "Book a session" },
+            { href: "/profile", label: "Profile" },
+            { href: "/check", label: "Test setup" },
+          ];
+  const isActive = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
 
   return (
     <header className="sticky top-0 z-50 border-b border-nd-primary/[0.07] bg-nd-background/85 backdrop-blur-md">
       <div className="mx-auto flex h-16 max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
-        <Logo href="/dashboard" />
-        <nav className="hidden items-center gap-1 sm:flex">
+        <Logo href={user.role === "admin" ? "/admin" : "/dashboard"} />
+        <nav className="hidden items-center gap-1 lg:flex">
           {links.map((l) => (
-            <Link key={l.href} href={l.href} className={`rounded-full px-4 py-2 text-sm font-semibold transition ${pathname === l.href ? "bg-nd-primary-fixed text-nd-primary" : "text-nd-muted hover:text-nd-primary"}`}>
+            <Link key={l.href} href={l.href} className={`rounded-full px-3 py-2 text-sm font-semibold transition ${isActive(l.href) ? "bg-nd-primary-fixed text-nd-primary" : "text-nd-muted hover:text-nd-primary"}`}>
               {l.label}
             </Link>
           ))}
@@ -48,7 +61,7 @@ export function AppHeader({ user }: { user: { fullName: string; role: string } }
             <div role="menu" className="absolute right-0 mt-2 w-56 rounded-2xl bg-nd-surface-lowest p-2 shadow-[0_16px_48px_rgba(36,66,103,0.15)]" onClick={() => setOpen(false)}>
               <p className="px-3 py-2 text-xs capitalize text-nd-muted">Signed in as {user.role}</p>
               {links.map((l) => (
-                <Link key={l.href} role="menuitem" href={l.href} className="block rounded-xl px-3 py-2 text-sm font-medium text-nd-primary hover:bg-nd-surface-low sm:hidden">{l.label}</Link>
+                <Link key={l.href} role="menuitem" href={l.href} className="block rounded-xl px-3 py-2 text-sm font-medium text-nd-primary hover:bg-nd-surface-low lg:hidden">{l.label}</Link>
               ))}
               <button role="menuitem" onClick={logout} className="w-full rounded-xl px-3 py-2 text-left text-sm font-medium text-red-600 hover:bg-red-50">Log out</button>
             </div>

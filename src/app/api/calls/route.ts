@@ -16,7 +16,7 @@ export const GET = handler(async (req) => {
 export const POST = handler(async (req) => {
   const user = await requireUser(req);
   rateLimit(`call:${user.id}`, 20, 10 * 60 * 1000);
-  const { calleeId } = await readJson(req, startCallSchema);
-  const call = await startCall(user, calleeId);
+  const { calleeId, appointmentId } = await readJson(req, startCallSchema);
+  const call = await startCall(user, calleeId, appointmentId);
   return json({ call }, 201);
 });
