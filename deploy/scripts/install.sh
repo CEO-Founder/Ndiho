@@ -112,9 +112,10 @@ warn "If your provider also has a cloud firewall (e.g. Hostinger hPanel → VPS 
 log "Scheduling certificate sync (daily) and database backups (nightly)"
 cat > /etc/cron.d/ndiho <<CRON
 SHELL=/bin/bash
-17 3 * * * root $DEPLOY_DIR/scripts/sync-turn-cert.sh >> /var/log/ndiho-cron.log 2>&1
-42 2 * * * root $DEPLOY_DIR/scripts/backup.sh >> /var/log/ndiho-cron.log 2>&1
+17 3 * * * root bash $DEPLOY_DIR/scripts/sync-turn-cert.sh >> /var/log/ndiho-cron.log 2>&1
+42 2 * * * root bash $DEPLOY_DIR/scripts/backup.sh >> /var/log/ndiho-cron.log 2>&1
 CRON
 ok "Cron jobs installed (/etc/cron.d/ndiho)"
 
-"$DEPLOY_DIR/scripts/deploy.sh"
+# Called through bash so it works even if file permissions were lost (e.g. ZIP download).
+bash "$DEPLOY_DIR/scripts/deploy.sh"

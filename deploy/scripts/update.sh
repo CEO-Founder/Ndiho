@@ -3,5 +3,5 @@
 source "$(dirname "$0")/lib.sh"
 log "Pulling latest code"
 git -C "$DEPLOY_DIR/.." pull --ff-only
-"$DEPLOY_DIR/scripts/backup.sh"
-"$DEPLOY_DIR/scripts/deploy.sh"
+bash "$DEPLOY_DIR/scripts/backup.sh"
+bash "$DEPLOY_DIR/scripts/deploy.sh"

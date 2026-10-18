@@ -22,7 +22,7 @@ ok "App is healthy"
 
 log "Waiting for the HTTPS certificate for ${DOMAIN}"
 for i in $(seq 1 40); do
-  if "$DEPLOY_DIR/scripts/sync-turn-cert.sh" >/dev/null 2>&1; then break; fi
+  if bash "$DEPLOY_DIR/scripts/sync-turn-cert.sh" >/dev/null 2>&1; then break; fi
   [ "$i" = 40 ] && { compose logs --tail=40 caddy; die "No certificate yet. Check that ${DOMAIN} points to ${PUBLIC_IP} and ports 80/443 are open."; }
   sleep 3
 done

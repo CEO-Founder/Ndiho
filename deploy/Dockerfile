@@ -25,7 +25,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/public ./public
 COPY --from=builder /app/db ./db
 COPY --from=builder /app/scripts/migrate.mjs /app/scripts/admin.mjs ./scripts/
-COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+# --chmod: works even if the checkout lost its executable bits.
+COPY --chmod=0755 deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 USER nextjs
 EXPOSE 3000
 HEALTHCHECK --interval=15s --timeout=5s --start-period=30s --retries=5 \
